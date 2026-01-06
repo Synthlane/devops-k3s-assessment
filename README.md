@@ -239,3 +239,74 @@ Helm will update the deployment, trigger a pod restart, and inject the OIDC conf
 - [Helm Documentation](https://helm.sh/docs/)
 - [OIDC Kubernetes Auth](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#openid-connect-tokens)
 
+
+---
+
+## Part 5: Ownership Questions
+
+### 1. Production Readiness
+**Top 5 risks before going live:**
+1. Single-node,no high availability (HA); node failure 
+2. No automated backups 
+3. Secrets/configs may be exposed or not rotated
+4. Lack of monitoring/alerting for resource usage and failures
+5. OIDC misconfiguration or IdP downtime blocks all logins
+
+**First 2 things you would fix:**
+1. Add a second node or move to managed K8s for HA.
+2. Implement automated, tested backups for critical data and configs.
+
+---
+
+### 2. Failure Scenario
+**Scenario:** Traffic spikes 10x and node goes down at 2 AM
+
+- **What breaks first?**
+	- The single node will run out of CPU/memory, causing pods to be evicted or crash. Eventually, the entire cluster becomes unavailable.
+- **How do you recover?**
+	- Investigate and restart the node (via Hetzner console if needed). Restore from backup if data is lost. Scale up resources if possible.
+- **What do you change the next day?**
+	- Add node multiple nodes for redundancy, set up autoscaling or move to a managed/high-availability cluster. Implement monitoring and alerting for early detection.
+
+---
+
+### 3. Security & Secrets
+- **How do you manage secrets?**
+	- Use Kubernetes Secrets, sealed-secrets, or an external secrets manager (e.g., HashiCorp Vault). Never store secrets in plaintext or in Git.
+- **What must never be in Git?**
+	- Passwords, API keys, certificates, kubeconfig files, and any sensitive credentials.
+- **What should be rotated?**
+	- All secrets, API tokens, certificates, and service account keys should be rotated regularly and after any suspected compromise.
+
+---
+
+### 4. Backups & Recovery
+- **What data must be backed up?**
+	- Application data (databases, persistent volumes), configuration files, Helm values, and cluster state (etcd/sqlite DB).
+- **Backup frequency?**
+	- At least daily for critical data; more frequently for high-change workloads.
+- **How do you test recovery?**
+	- Regularly perform restore drills in a test environment to ensure backups are valid and recovery steps are documented.
+
+---
+
+### 5. Cost Ownership (Hetzner)
+- **How do you keep infra costs low?**
+	- Use minimal VM sizes, spot/preemptible instances, and only run essential workloads. Monitor usage and shut down unused resources.
+- **What do you avoid early?**
+	- Avoid over-provisioning, expensive managed services, and unnecessary third-party tools.
+- **When would you move away from k3s?**
+	- When you need multi-node HA, advanced networking, or managed support—or as the team and workload scale beyond a single node’s capacity.
+
+---
+
+## Extra Credit: OIDC Provider with Self-Signed Certificate
+
+**How to make the application trust a custom CA in a maintainable way:**
+
+1. Add the custom CA certificate to a Kubernetes Secret or ConfigMap.
+2. Mount the CA into the pod at a standard location 
+3. Use an initContainer or startup script to update the trust store.
+4. Automate this via Helm values and templates for consistency across environments.
+5. Document the process and rotate the CA if needed.
+
